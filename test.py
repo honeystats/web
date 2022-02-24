@@ -4,11 +4,11 @@ import time
 from urllib.parse import unquote
 import json
 
-#hostName = "10.3.0.12"
-#serverPort = 8080
+hostName = "10.3.0.12"
+serverPort = 8080
 
-hostName = 'localhost'
-serverPort = 80
+#hostName = 'localhost'
+#serverPort = 80
 
 log = "./log.txt"
 
