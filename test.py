@@ -3,11 +3,21 @@ from http.server import BaseHTTPRequestHandler, HTTPServer, SimpleHTTPRequestHan
 import time
 from urllib.parse import unquote
 import json
+import os
+import elasticsearch
+import datetime
 
 hostName = "10.3.0.12"
 serverPort = 8080
 
 log = "./log.txt"
+
+ES_URL = os.environ.get('ES_URL')
+if not ES_URL:
+    print("ES_URL was missing")
+    exit(1)
+ELASTICSEARCH = elasticsearch.Elasticsearch(ES_URL)
+
 
 class MyServer(SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -27,8 +37,10 @@ class MyServer(SimpleHTTPRequestHandler):
         #self.path = '/var/www/html/index.html'
         ip = self.client_address[0]
         port = self.client_address[1]
+        time = datetime.datetime.now().isoformat()
 
         record = {
+                "@timestamp": time,
                 "action": "get",
                 "fields": {
                     "ip": ip,
@@ -36,10 +48,11 @@ class MyServer(SimpleHTTPRequestHandler):
                     "url path": self.path,
                     }
                 }
-        logfile = open(log, "a")
-        logfile.write("\n")
-        json.dump(record, logfile)
-        logfile.close()
+        ELASTICSEARCH.index(index="web-test", document=record)
+        #logfile = open(log, "a")
+        #logfile.write("\n")
+        #json.dump(record, logfile)
+        #logfile.close()
         
         #self.path = '/index.html'
         return SimpleHTTPRequestHandler.do_GET(self)
@@ -66,7 +79,7 @@ class MyServer(SimpleHTTPRequestHandler):
         #print(ip)
         port = self.client_address[1]
         #print(dir(self))
-        time = self.date_time_string()
+        time = datetime.datetime.now().isoformat()
         headers = self.headers
         #print(headers)
        
@@ -88,8 +101,21 @@ class MyServer(SimpleHTTPRequestHandler):
             print(sql_error)
         else:
             sql = False
-
+        inj_attempt = check_parameter_injection(uname, passwd)
+        '''
+        if inj_attempt[0]:
+                if 'ls -la' in inj_attempt[1]:
+                        self.path = '/lsoutput.html'
+                        SimpleHTTPRequestHandler.do_GET(self)
+                elif 'ls' in inj_attempt[1]:
+                        self.path = '/ls.html'
+                        SimpleHTTPRequestHandler.do_GET(self)
+                else:
+                        self.path = '/permission denied.html'
+                        SimpleHTTPRequestHandler.do_GET(self)
+        '''
         record = {
+                "@timestamp": time,
                 "action": "post",
                 "fields": {
                     "ip": ip,
@@ -97,25 +123,52 @@ class MyServer(SimpleHTTPRequestHandler):
                     "time": time,
                     "username": uname,
                     "password": passwd,
-                    "sql injection": sql,
+                    "sql_injection": sql,
+                    "parameter_injection": {"attempt": inj_attempt[0], "injection_string": inj_attempt[1]},
                     "headers": header,
                     }
                 }
-        logfile = open(log, "a")
-        logfile.write("\n")
-        json.dump(record, logfile)
-        logfile.close()
+        ELASTICSEARCH.index(index="web-test", document=record)
+        # logfile = open(log, "a")
+        # logfile.write("\n")
+        # json.dump(record, logfile)
+        # logfile.close()
 
 
         if(passwd=='1'):
             self.path = '/onclicksubmit.html'
             return SimpleHTTPRequestHandler.do_GET(self)
-        elif("ls" in passwd):
-            self.path = '/lsoutput.html'
-            SimpleHTTPRequestHandler.do_GET(self)
+        elif inj_attempt[0]:
+                if 'ls -la' in inj_attempt[1]:
+                        self.path = '/lsoutput.html'
+                        SimpleHTTPRequestHandler.do_GET(self)
+                elif 'ls' in inj_attempt[1]:
+                        self.path = '/ls.html'
+                        SimpleHTTPRequestHandler.do_GET(self)
+                else:
+                        self.path = '/permission denied.html'
+                        SimpleHTTPRequestHandler.do_GET(self)
         else:
             self.path = '/loginfailed.html'
             SimpleHTTPRequestHandler.do_GET(self)
+
+def check_parameter_injection(uname, passwd):
+    injection_string = ''
+    list_spl_chars = ['&', ';', '0x0a', '\n', '&&', '|', '||']
+    for char in list_spl_chars:
+        if char in uname:
+            attempt = True
+            new_str = uname.split(char)
+            injection_string = new_str[1]
+            break
+        elif char in passwd:
+            attempt = True
+            new_str = passwd.split(char)
+            injection_string = new_str[1]
+            break
+        else:
+            attempt = False
+    return [attempt, injection_string]
 
 def check_sql(uname, passwd):
     #sql query:
