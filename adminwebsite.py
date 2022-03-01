@@ -1,7 +1,7 @@
 # Python 3 server example
 from http.server import BaseHTTPRequestHandler, HTTPServer, SimpleHTTPRequestHandler
 import time
-from urllib.parse import unquote
+from urllib.parse import unquote_plus
 import json
 import os
 import elasticsearch
@@ -68,8 +68,11 @@ class MyServer(SimpleHTTPRequestHandler):
         content_length = int(self.headers['Content-Length'])
         content = self.rfile.read(content_length)
         #print(content)
-        test_decode = unquote(content)
+        #print(type(content))
+        #print(str(content)[2:-1])
+        test_decode = unquote_plus(str(content)[2:-1])
         #print(test_decode)
+        #print(str(test_decode))
         results = test_decode.split('&')
         #print(results)
         uname = results[0][6:]
@@ -79,7 +82,6 @@ class MyServer(SimpleHTTPRequestHandler):
         #print(passwd)
         #print(ip)
         port = self.client_address[1]
-        #print(dir(self))
         time = datetime.datetime.now().isoformat()
         headers = self.headers
         #print(headers)
@@ -87,25 +89,48 @@ class MyServer(SimpleHTTPRequestHandler):
         #print(headers['Host'])
 
         #print(dir(headers))
-        #h = str(headers)
-        #print(h)
-        #print(headers.keys)
         #need to add header information
         header = {}
         for k in headers:
             header[k] = headers[k]
-        #print(headers)
 
         sql_error_uname = check_sql(uname, uname, passwd)
         sql_error_passwd = check_sql(passwd, uname, passwd)
-        print('sql uname',sql_error_uname)
-        if(sql_error_uname!='no' or sql_error_passwd!='no'):
-            sql = True
-            print(sql_error_uname, sql_error_passwd)
-        else:
-            sql = False
+        sql = {
+                "sql_injection": False,
+                "username_injection": False,
+                "password_injection": False,
+                }
+        sql_error = ''
+        #sql injection in username
+        if(sql_error_uname[0]):
+            sql["sql_injection"] = True
+            sql["username_injection"] = True
+            if(sql_error_uname[1]!='user0318'):
+                sql["username_specified"] = sql_error_uname[1]
+            if(sql_error_uname[2]):
+                sql["success"] = True
+            else:
+                sql["success"] = False
+                sql["sql_error_sent"] = sql_error_uname[3]
+                sql_error = sql_error_uname[3]
+            sql["attempt"] = uname
+        #sql injection in password
+        if(sql_error_passwd[0]):
+            sql["sql_injection"] = True
+            sql["password_injection"] = True
+            if(sql_error_passwd[2]):
+                sql["success"] = True
+            elif(not sql_error_uname[0]):
+                sql["success"] = False
+                sql_error = sql_error_passwd[3]
+                sql["sql_error_sent"] = sql_error
+            if(not sql_error_uname[0]):
+                sql["username_specified"] = uname
+            sql["attempt"] = passwd
 
         inj_attempt = check_parameter_injection(uname, passwd)
+
 
         record = {
                 "@timestamp": time,
@@ -116,7 +141,7 @@ class MyServer(SimpleHTTPRequestHandler):
                     "time": time,
                     "username": uname,
                     "password": passwd,
-                    "sql_injection": sql,
+                    "sql": sql,
                     "parameter_injection": {"attempt": inj_attempt[0], "injection_string": inj_attempt[1]},
                     "headers": header,
                     }
@@ -128,23 +153,32 @@ class MyServer(SimpleHTTPRequestHandler):
         json.dump(record, logfile)
         logfile.close()
         '''
-
+        os_commands = {
+            "ls" : "/ls.html",
+            "ls+-la": "/lsoutput.html",
+            "pwd" : "/pwd.html",
+        }
         if(passwd=='1'):
             self.path = '/onclicksubmit.html'
-            return SimpleHTTPRequestHandler.do_GET(self)
+            SimpleHTTPRequestHandler.do_GET(self)
+        elif(sql["sql_injection"]):
+            self.path = '/onclicksubmit.html'
+            SimpleHTTPRequestHandler.do_GET(self)
+        '''
         elif inj_attempt[0]:
-                if 'ls -la' in inj_attempt[1]:
-                        self.path = '/lsoutput.html'
-                        SimpleHTTPRequestHandler.do_GET(self)
-                elif 'ls' in inj_attempt[1]:
-                        self.path = '/ls.html'
+            # if injection attempt[0] is True
+            # injection attempt[1] holds the injection string
+                for command in os_commands.keys():
+                    if command in inj_attempt[1]:
+                        print("Debegging parameter injections: \n",inj_attempt,"\n", command,"\n", os_commands[command])
+                        self.path = os_commands[command]
                         SimpleHTTPRequestHandler.do_GET(self)
                 else:
-                        self.path = '/permission denied.html'
+                        self.path = '/permissiondenied.html'
                         SimpleHTTPRequestHandler.do_GET(self)
-        else:
-            self.path = '/loginfailed.html'
-            SimpleHTTPRequestHandler.do_GET(self)
+        '''
+        self.path = '/loginfailed.html'
+        SimpleHTTPRequestHandler.do_GET(self)
 
 def check_parameter_injection(uname, passwd):
     injection_string = ''
@@ -165,21 +199,40 @@ def check_parameter_injection(uname, passwd):
     return [attempt, injection_string]
 
 def parse_sql(command):
-    #if(';' in command):
-    #    return 'multiple_commands'
+    #return format: [success T/F, command if T or reason if F]
     #print('command: ',command)
     command = command.upper()
-    command = command.replace('+', ' ')
+    #command = command.replace('+', ' ')
     command_list = command.split(' ')
     #print('command list: ', command_list)
-    permissions_statements = ['SELECT','UPDATE','DELETE','DROP','CREATE','ALTER']
+    permissions_statements = ['UPDATE','DELETE','DROP','CREATE','ALTER','UNION','SELECT']
     for statement in permissions_statements:
         if(statement in command_list):
-            return statement
-    
-    return 'test'
+            return [False, statement]
+    print("parse sql(",command,")")
+    if (command.strip() == ';' or command.strip()==''):
+        return [True, command]
+    #check logic
+    if('OR' in command_list):
+        print(command_list)
+        before = ''
+        after = ''
+        for i in range(len(command_list)):
+            if(command_list[i] == '=' and i<len(command_list)):
+                after = command[i+1]
+                if(before!='' and (before==after or before==after+"'")):
+                    return [True, 'or']
+            before = command_list[i]
+        for i in command_list:
+            if('=' in i):
+                equation = i
+                equation = equation.split('=')
+                if(equation[0]==equation[1] or equation[0]==equation[1]+"'"):
+                    return [True, 'or']
+    return [False, command]
 
 def check_sql(string, uname, passwd):
+    #return format: [sql_inj T/F, username attempted, success T/F if applicable, error code if applicable or sql code injected]
     #sql query:
     #SELECT * FROM users WHERE username = uname AND password = psw
     #normal entry:
@@ -191,7 +244,6 @@ def check_sql(string, uname, passwd):
     quotes_error = 'Syntax error at or near ";" Position: ' + str(len(query)+len(uname)+len(passwd))
     permissions_error = 'Error: user does not have '
     permissions_error_2 = ' permissions'
-    #multiple_commands_error = ''
     generic_error = 'Syntax error in SQL statement'
 
     #print("string:", string)
@@ -200,31 +252,28 @@ def check_sql(string, uname, passwd):
     #remove up until first single quote
     string_list = string.split("'",1)
     #passwd_list = passwd.split("'",1)
-    string_1 = string_list[0]
+    string_1 = string_list[0] #this is the username attempted
     #password = passwd_list[0]
     #print(username, password)
     #print(type(username), type(password))
     #print(uname_list, passwd_list)
     if (len(string_list)==1):
         #no single quotes
-        return "no"
+        return [False, string_1]
     #only keep string before comments
     comments = ['--','#','/*']
     string_comment = False
-    #passwd_comment = False
     for comment in comments:
         if(comment in string_list[1]):
+            #check for comments after first single quote
             string_comment = True
-            string_list[1] = string_list[1].split(comment)[0]
-        #if(comment in passwd_list[1]);
-        #    passwd_comment = True
-        #    passwd_list[1] = passwd_list[1].split(comment)[0]
+            string_list[1] = string_list[1].split(comment)[0] #this keeps everything before the comment
     #remove after last single quote if not commented
     if (len(string_list)>1 and not string_comment):
         string_r = string_list[1][::-1]
         string_list = string_r.split("'",1)
     elif (not string_comment):
-        uname_list = []
+        string_list = []
     #if (len(passwd_list)>1 and not passwd_comment):
     #    passwd_r = passwd_list[1][::-1]
     #    passwd_list = passwd_r.split("'",1)
@@ -233,31 +282,29 @@ def check_sql(string, uname, passwd):
     #print(uname_list, passwd_list)
     if (len(string_list)==1):
         #one single quote, throw error
-        return quotes_error
+        return [True, string_1, False, quotes_error]
     #isolate sql command and parse
     if (len(string_list)>1):
-        #string_command = string_list[1][::-1]
-        string_command = string_list[1]
+        if(not string_comment):
+            string_command = string_list[1][::-1]
+        else:
+            string_command = string_list[1]
         #print(string_command)
         string_results = parse_sql(string_command)
-    #if(len(passwd_list)>1):
-    #    passwd_command = passwd_list[1][::-1]
-    #    passwd_results = parse_sql(passwd_command)
-    #    print(passwd_command)
-    #check for single quotes
-    #if (uname.count("'")%2!=0 or passwd.count("'")%2!=0):
-    #    return quotes_error
 
-    #check double quotes
-    #if (uname.count('"')%2!=0 or passwd.count('"')%2!=0):
-    #    return quotes_error
-    
-        permissions_statements = ['SELECT','UPDATE','DELETE','DROP','CREATE','ALTER']
-        if(string_results in permissions_statements):
-            return permissions_error+string_results+permissions_error_2
-        else:
-            print(string_results)
-    return 'no'
+        #check for permissions error
+        permissions_statements = ['SELECT','UPDATE','DELETE','DROP','CREATE','ALTER','UNION']
+        if(string_results[0]==False and string_results[1] in permissions_statements):
+            return [True, string_1, False, permissions_error+string_results[1]+permissions_error_2]
+        elif(string_results[0]==True):
+            if(string_results[1]=='or'):
+            #username not specified
+                return [True, "user0318", True, string_command]
+            else:
+                return [True, string_1, True, string_command]
+        print(string_results)
+
+    return [True, string_1, False, generic_error]
 
 def main():
     webServer = HTTPServer((hostName, serverPort), MyServer)
