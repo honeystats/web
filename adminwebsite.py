@@ -10,8 +10,6 @@ import datetime
 hostName = "10.3.0.12"
 serverPort = 8080
 
-#hostName = 'localhost'
-#serverPort = 80
 
 log = "./log.txt"
 
@@ -59,20 +57,9 @@ class MyServer(SimpleHTTPRequestHandler):
         return SimpleHTTPRequestHandler.do_GET(self)
 
     def do_POST(self):
-        #record information submitted in a log file, json
-        #print error message or handle injection attacks here
-        #self.send_response(200)
-        #self.send_header("Content-type", "text/html")
-        #self.end_headers()
-
         content_length = int(self.headers['Content-Length'])
         content = self.rfile.read(content_length)
-        #print(content)
-        #print(type(content))
-        #print(str(content)[2:-1])
         test_decode = unquote_plus(str(content)[2:-1])
-        #print(test_decode)
-        #print(str(test_decode))
         results = test_decode.split('&')
         #print(results)
         uname = results[0][6:]
@@ -80,7 +67,6 @@ class MyServer(SimpleHTTPRequestHandler):
         ip = self.client_address[0]
         #print(uname)
         #print(passwd)
-        #print(ip)
         port = self.client_address[1]
         time = datetime.datetime.now().isoformat()
         headers = self.headers
@@ -93,6 +79,9 @@ class MyServer(SimpleHTTPRequestHandler):
         header = {}
         for k in headers:
             header[k] = headers[k]
+        
+        #parse headers for usability
+        
 
         sql_error_uname = check_sql(uname, uname, passwd)
         sql_error_passwd = check_sql(passwd, uname, passwd)
@@ -117,6 +106,9 @@ class MyServer(SimpleHTTPRequestHandler):
             sql["attempt"] = uname
         #sql injection in password
         if(sql_error_passwd[0]):
+            sql["attempt"] = uname
+        #sql injection in password
+        if(sql_error_passwd[0]):
             sql["sql_injection"] = True
             sql["password_injection"] = True
             if(sql_error_passwd[2]):
@@ -130,7 +122,6 @@ class MyServer(SimpleHTTPRequestHandler):
             sql["attempt"] = passwd
 
         inj_attempt = check_parameter_injection(uname, passwd)
-
 
         record = {
                 "@timestamp": time,
@@ -162,8 +153,13 @@ class MyServer(SimpleHTTPRequestHandler):
             self.path = '/onclicksubmit.html'
             SimpleHTTPRequestHandler.do_GET(self)
         elif(sql["sql_injection"]):
-            self.path = '/onclicksubmit.html'
-            SimpleHTTPRequestHandler.do_GET(self)
+            if(sql["success"]):
+                self.path = '/onclicksubmit.html'
+                SimpleHTTPRequestHandler.do_GET(self)
+            #else:
+                #need to print sql error on page
+                #self.path = 
+                #SimpleHTTPRequestHandler.do_GET(self)
         '''
         elif inj_attempt[0]:
             # if injection attempt[0] is True
@@ -200,11 +196,8 @@ def check_parameter_injection(uname, passwd):
 
 def parse_sql(command):
     #return format: [success T/F, command if T or reason if F]
-    #print('command: ',command)
     command = command.upper()
-    #command = command.replace('+', ' ')
     command_list = command.split(' ')
-    #print('command list: ', command_list)
     permissions_statements = ['UPDATE','DELETE','DROP','CREATE','ALTER','UNION','SELECT']
     for statement in permissions_statements:
         if(statement in command_list):
@@ -233,30 +226,16 @@ def parse_sql(command):
 
 def check_sql(string, uname, passwd):
     #return format: [sql_inj T/F, username attempted, success T/F if applicable, error code if applicable or sql code injected]
-    #sql query:
-    #SELECT * FROM users WHERE username = uname AND password = psw
-    #normal entry:
-    #SELECT * FROM users WHERE username = 'caitlin' AND password = '1'
-    #injection attempt:
-    #SELECT * FROM users WHERE username = 'caitlin' AND password = 'password' OR '1' = '1'
+    #assumed sql query: SELECT * FROM users WHERE username = uname AND password = psw
     query = "SELECT * FROM users WHERE username =  AND password = "
-    misspell_error = 'Syntax error in SQL statement "SELECT * FROM users WHERE username = ' + uname + ' AND password = ' + passwd + ';"'
+    generic_error = 'Syntax error in SQL statement "SELECT * FROM users WHERE username = ' + uname + ' AND password = ' + passwd + ';"'
     quotes_error = 'Syntax error at or near ";" Position: ' + str(len(query)+len(uname)+len(passwd))
     permissions_error = 'Error: user does not have '
     permissions_error_2 = ' permissions'
-    generic_error = 'Syntax error in SQL statement'
-
-    #print("string:", string)
-    #print("passwd:", passwd)
 
     #remove up until first single quote
     string_list = string.split("'",1)
-    #passwd_list = passwd.split("'",1)
     string_1 = string_list[0] #this is the username attempted
-    #password = passwd_list[0]
-    #print(username, password)
-    #print(type(username), type(password))
-    #print(uname_list, passwd_list)
     if (len(string_list)==1):
         #no single quotes
         return [False, string_1]
@@ -274,12 +253,6 @@ def check_sql(string, uname, passwd):
         string_list = string_r.split("'",1)
     elif (not string_comment):
         string_list = []
-    #if (len(passwd_list)>1 and not passwd_comment):
-    #    passwd_r = passwd_list[1][::-1]
-    #    passwd_list = passwd_r.split("'",1)
-    #elif (not passwd_comment):
-    #    passwd_list = []
-    #print(uname_list, passwd_list)
     if (len(string_list)==1):
         #one single quote, throw error
         return [True, string_1, False, quotes_error]
@@ -310,8 +283,6 @@ def main():
     webServer = HTTPServer((hostName, serverPort), MyServer)
     print("Server started http://%s:%s" % (hostName, serverPort))
 
-    #BaseHTTPRequestHandler.server_version = ""
-    #BaseHTTPRequestHandler.sys_version = "Apache httpd 2.4.18"
     SimpleHTTPRequestHandler.server_version = "Apache/2.2.3"
     BaseHTTPRequestHandler.sys_version = "Ubuntu"
 
@@ -322,6 +293,3 @@ def main():
 
     webServer.server_close()
     print("Server stopped.")
-
-if __name__ == "__main__":
-    main()
