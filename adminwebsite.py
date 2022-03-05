@@ -46,13 +46,14 @@ class MyServer(SimpleHTTPRequestHandler):
         ip = self.client_address[0]
         port = self.client_address[1]
         time = datetime.datetime.now().isoformat()
+        #ip = "104.28.106.119"
         record = {
                 "@timestamp": time,
                 "action": "get",
+                "sourceIP": ip,
+                "sourcePort": port,
                 "fields": {
-                    "ip": ip,
-                    "port": port,
-                    "url path": self.path,
+                    "url_path": self.path,
                     }
                 }
         ELASTICSEARCH.index(index="web-test", document=record)
@@ -130,23 +131,23 @@ class MyServer(SimpleHTTPRequestHandler):
                 sql["username_specified"] = uname
             sql["attempt"] = passwd
 
-        inj_attempt = check_parameter_injection(uname, passwd)
-
+        inj_attempt = check_oscommand_injection(uname, passwd)
+        #ip = "104.28.106.119"
         record = {
                 "@timestamp": time,
                 "action": "post",
+                "sourceIP": ip,
+                "sourcePort": port,
                 "fields": {
-                    "ip": ip,
-                    "port": port,
                     "time": time,
                     "username": uname,
                     "password": passwd,
                     "sql": sql,
-                    "parameter_injection": {"attempt": inj_attempt[0], "injection_string": inj_attempt[1]},
+                    "oscommand_injection": {"attempt": inj_attempt[0], "injection_string": inj_attempt[1]},
                     "headers": header,
                     }
                 }
-        ELASTICSEARCH.index(index="web-test", document=record)
+        ELASTICSEARCH.index(index="web-test", document=record, pipeline="geoip")
         '''
         logfile = open(log, "a")
         logfile.write("\n")
@@ -161,7 +162,7 @@ class MyServer(SimpleHTTPRequestHandler):
             # injection attempt[1] holds the injection string
                 for command in os_commands.keys():
                     if command == inj_attempt[1]:
-                        print("Debegging parameter injections: \n",inj_attempt,"\n", command,"\n", os_commands[command])
+                        print("Debegging oscommand injections: \n",inj_attempt,"\n", command,"\n", os_commands[command])
                         self.path = os_commands[command]
                         SimpleHTTPRequestHandler.do_GET(self)
         elif(sql["sql_injection"]):
@@ -184,7 +185,7 @@ class MyServer(SimpleHTTPRequestHandler):
         SimpleHTTPRequestHandler.do_GET(self)
 
 
-def check_parameter_injection(uname, passwd):
+def check_oscommand_injection(uname, passwd):
     injection_string = ''
     attempt = False
     list_spl_chars = ['&', ';', '0x0a', '\n', '&&', '|', '||']
