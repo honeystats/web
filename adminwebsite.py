@@ -6,6 +6,7 @@ import json
 import os
 import elasticsearch
 import datetime
+import shutil
 
 hostName = "10.3.0.12"
 serverPort = 8080
@@ -18,6 +19,12 @@ if not ES_URL:
     print("ES_URL was missing")
     exit(1)
 ELASTICSEARCH = elasticsearch.Elasticsearch(ES_URL)
+
+os_commands = {
+            "ls" : "/ls.html",
+            "ls+-la": "/lsoutput.html",
+            "pwd" : "/pwd.html",
+        }
 
 class MyServer(SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -144,23 +151,9 @@ class MyServer(SimpleHTTPRequestHandler):
         json.dump(record, logfile)
         logfile.close()
         '''
-        os_commands = {
-            "ls" : "/ls.html",
-            "ls+-la": "/lsoutput.html",
-            "pwd" : "/pwd.html",
-        }
         if(passwd=='1'):
             self.path = '/onclicksubmit.html'
             SimpleHTTPRequestHandler.do_GET(self)
-        elif(sql["sql_injection"]):
-            if(sql["success"]):
-                self.path = '/onclicksubmit.html'
-                SimpleHTTPRequestHandler.do_GET(self)
-            #else:
-                #need to print sql error on page
-                #self.path = 
-                #SimpleHTTPRequestHandler.do_GET(self)
-        '''
         elif inj_attempt[0]:
             # if injection attempt[0] is True
             # injection attempt[1] holds the injection string
@@ -169,10 +162,22 @@ class MyServer(SimpleHTTPRequestHandler):
                         print("Debegging parameter injections: \n",inj_attempt,"\n", command,"\n", os_commands[command])
                         self.path = os_commands[command]
                         SimpleHTTPRequestHandler.do_GET(self)
-                else:
-                        self.path = '/permissiondenied.html'
-                        SimpleHTTPRequestHandler.do_GET(self)
-        '''
+        elif(sql["sql_injection"]):
+            if(sql["success"]):
+                self.path = '/onclicksubmit.html'
+                SimpleHTTPRequestHandler.do_GET(self)
+            else:
+                #need to print sql error on page
+                shutil.copyfile('/opt/web/sql_generic.html', '/opt/web/sql_error.html')
+                f = open('sql_error.html','a')
+                f.write(sql["sql_error_sent"])
+                f.write("</h3></body></html>")
+                f.close()
+                self.path = '/sql_error.html'
+                SimpleHTTPRequestHandler.do_GET(self)
+        else:
+                self.path = '/permissiondenied.html'
+                SimpleHTTPRequestHandler.do_GET(self)
         self.path = '/loginfailed.html'
         SimpleHTTPRequestHandler.do_GET(self)
 
@@ -180,18 +185,20 @@ def check_parameter_injection(uname, passwd):
     injection_string = ''
     list_spl_chars = ['&', ';', '0x0a', '\n', '&&', '|', '||']
     for char in list_spl_chars:
-        if char in uname:
-            attempt = True
-            new_str = uname.split(char)
-            injection_string = new_str[1]
-            break
-        elif char in passwd:
-            attempt = True
-            new_str = passwd.split(char)
-            injection_string = new_str[1]
-            break
-        else:
-            attempt = False
+            for i in os_commands.keys():
+                if i in uname and char in uname:
+                    attempt = True
+                    new_str = uname.split(char)
+                    injection_string = new_str[1]
+                    break
+            for i in os_commands.keys():
+                if i in uname and char in passwd:
+                    attempt = True
+                    new_str = passwd.split(char)
+                    injection_string = new_str[1]
+                    break
+                else:
+                    attempt = False
     return [attempt, injection_string]
 
 def parse_sql(command):
@@ -202,12 +209,12 @@ def parse_sql(command):
     for statement in permissions_statements:
         if(statement in command_list):
             return [False, statement]
-    print("parse sql(",command,")")
+    #print("parse sql(",command,")")
     if (command.strip() == ';' or command.strip()==''):
         return [True, command]
     #check logic
     if('OR' in command_list):
-        print(command_list)
+        #print(command_list)
         before = ''
         after = ''
         for i in range(len(command_list)):
@@ -293,3 +300,6 @@ def main():
 
     webServer.server_close()
     print("Server stopped.")
+
+if __name__ == "__main__":
+    main()
