@@ -60,7 +60,8 @@ class MyServer(SimpleHTTPRequestHandler):
         json.dump(record, logfile)
         logfile.close()
         '''
-        #self.path = '/index.html'
+        #if (self.path == '/index.html'):
+        #    return SimpleHTTPRequestHandler.do_GET(self.path)
         return SimpleHTTPRequestHandler.do_GET(self)
 
     def do_POST(self):
@@ -181,8 +182,10 @@ class MyServer(SimpleHTTPRequestHandler):
         self.path = '/loginfailed.html'
         SimpleHTTPRequestHandler.do_GET(self)
 
+
 def check_parameter_injection(uname, passwd):
     injection_string = ''
+    attempt = False
     list_spl_chars = ['&', ';', '0x0a', '\n', '&&', '|', '||']
     for char in list_spl_chars:
             for i in os_commands.keys():
@@ -190,15 +193,12 @@ def check_parameter_injection(uname, passwd):
                     attempt = True
                     new_str = uname.split(char)
                     injection_string = new_str[1]
-                    break
-            for i in os_commands.keys():
-                if i in uname and char in passwd:
+                    return [attempt, injection_string]
+                if i in passwd and char in passwd:
                     attempt = True
                     new_str = passwd.split(char)
                     injection_string = new_str[1]
-                    break
-                else:
-                    attempt = False
+                    return [attempt, injection_string]
     return [attempt, injection_string]
 
 def parse_sql(command):
