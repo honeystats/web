@@ -24,6 +24,7 @@ os_commands = {
             "ls" : "/ls.html",
             "ls+-la": "/lsoutput.html",
             "pwd" : "/pwd.html",
+            "hostnamectl" : "/hostname.html",
         }
 
 class MyServer(SimpleHTTPRequestHandler):
@@ -159,7 +160,7 @@ class MyServer(SimpleHTTPRequestHandler):
             # if injection attempt[0] is True
             # injection attempt[1] holds the injection string
                 for command in os_commands.keys():
-                    if command in inj_attempt[1]:
+                    if command == inj_attempt[1]:
                         print("Debegging parameter injections: \n",inj_attempt,"\n", command,"\n", os_commands[command])
                         self.path = os_commands[command]
                         SimpleHTTPRequestHandler.do_GET(self)
