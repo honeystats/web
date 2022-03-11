@@ -7,6 +7,7 @@ import os
 import elasticsearch
 import datetime
 import shutil
+from ua_parser import user_agent_parser
 
 hostName = "10.3.0.12"
 serverPort = 8080
@@ -26,6 +27,16 @@ os_commands = {
             "pwd" : "/pwd.html",
             "hostnamectl" : "/hostname.html",
         }
+
+def get_tz(now):
+    '''
+    local_now = now
+    local_tz = local_now.tzinfo
+    local_tzname = local_tz.tzname(local_now)
+    return local_tzname
+    '''
+    pass
+
 
 class MyServer(SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -91,7 +102,7 @@ class MyServer(SimpleHTTPRequestHandler):
             header[k] = headers[k]
         
         #parse headers for usability
-        
+        parsed_header = parse_headers(headers)
 
         sql_error_uname = check_sql(uname, uname, passwd)
         sql_error_passwd = check_sql(passwd, uname, passwd)
@@ -133,6 +144,7 @@ class MyServer(SimpleHTTPRequestHandler):
 
         inj_attempt = check_oscommand_injection(uname, passwd)
         #ip = "104.28.106.119"
+        timezone = get_tz(time)
         record = {
                 "@timestamp": time,
                 "action": "post",
@@ -145,6 +157,8 @@ class MyServer(SimpleHTTPRequestHandler):
                     "sql": sql,
                     "oscommand_injection": {"attempt": inj_attempt[0], "injection_string": inj_attempt[1]},
                     "headers": header,
+                    "parsed_headers": parsed_header,
+                    "timezone": timezone,
                     }
                 }
         ELASTICSEARCH.index(index="web-test", document=record, pipeline="geoip")
@@ -154,7 +168,7 @@ class MyServer(SimpleHTTPRequestHandler):
         json.dump(record, logfile)
         logfile.close()
         '''
-        if(passwd=='1'):
+        if(uname=='admin' and passwd=='TotallySecurePassword'):
             self.path = '/onclicksubmit.html'
             SimpleHTTPRequestHandler.do_GET(self)
         elif inj_attempt[0]:
@@ -178,12 +192,27 @@ class MyServer(SimpleHTTPRequestHandler):
                 f.close()
                 self.path = '/sql_error.html'
                 SimpleHTTPRequestHandler.do_GET(self)
-        else:
-                self.path = '/permissiondenied.html'
-                SimpleHTTPRequestHandler.do_GET(self)
+        #else:
+        #        self.path = '/permissiondenied.html'
+        #        SimpleHTTPRequestHandler.do_GET(self)
         self.path = '/loginfailed.html'
         SimpleHTTPRequestHandler.do_GET(self)
+        print(headers)
 
+def parse_headers(headers):
+    parsed = {}
+    languages = []
+    language = headers['Accept-Language'].split(';')
+    for l in language:
+        l = l.split(',')
+        for i in l:
+            if('=' not in i):
+                languages.append(i)
+    parsed['languages'] = languages
+    user_agent = user_agent_parser.Parse(headers['User-Agent'])
+    parsed['user_agent'] = user_agent
+
+    return parsed
 
 def check_oscommand_injection(uname, passwd):
     injection_string = ''
