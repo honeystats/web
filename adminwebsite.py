@@ -9,9 +9,7 @@ import datetime
 import shutil
 from ua_parser import user_agent_parser
 
-hostName = "10.3.0.12"
-serverPort = 8080
-
+serverPort = os.environ.get('PORT') or 8080
 
 log = "./log.txt"
 
@@ -318,8 +316,9 @@ def check_sql(string, uname, passwd):
     return [True, string_1, False, generic_error]
 
 def main():
-    webServer = HTTPServer((hostName, serverPort), MyServer)
-    print("Server started http://%s:%s" % (hostName, serverPort))
+    bind_addr = ("0.0.0.0", serverPort)
+    webServer = HTTPServer(bind_addr, MyServer)
+    print("Server started http://%s:%s" % bind_addr)
 
     SimpleHTTPRequestHandler.server_version = "Apache/2.2.3"
     BaseHTTPRequestHandler.sys_version = "Ubuntu"
