@@ -17,7 +17,6 @@ ES_URL = os.environ.get('ES_URL')
 if not ES_URL:
     print("ES_URL was missing")
     exit(1)
-ELASTICSEARCH = elasticsearch.Elasticsearch(ES_URL)
 
 os_commands = {
             "ls" : "/ls.html",
@@ -35,6 +34,7 @@ def get_tz(now):
     '''
     pass
 
+ELASTICSEARCH = None
 
 class MyServer(SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -316,6 +316,9 @@ def check_sql(string, uname, passwd):
     return [True, string_1, False, generic_error]
 
 def main():
+    global ELASTICSEARCH
+    print("Starting web service...")
+    ELASTICSEARCH = elasticsearch.Elasticsearch(ES_URL, retry_on_timeout=True, max_retries=1000)
     bind_addr = ("0.0.0.0", serverPort)
     webServer = HTTPServer(bind_addr, MyServer)
     print("Server started http://%s:%s" % bind_addr)
