@@ -9,7 +9,7 @@ import datetime
 import shutil
 from ua_parser import user_agent_parser
 
-serverPort = os.environ.get('PORT') or 8080
+serverPort = int(os.environ.get('PORT')) or 8080
 
 log = "./log.txt"
 
