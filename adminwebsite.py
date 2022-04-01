@@ -9,7 +9,12 @@ import datetime
 import shutil
 from ua_parser import user_agent_parser
 
+#<<<<<<< HEAD
 serverPort = int(os.environ.get('PORT') or 8080)
+#=======
+#hostName = "10.3.0.12"
+#serverPort = 8080
+#>>>>>>> 8f42c39 (proxy stats/x-forwarded-for)
 
 log = "./log.txt"
 
@@ -25,6 +30,7 @@ os_commands = {
             "hostnamectl" : "/hostname.html",
         }
 
+#<<<<<<< HEAD
 def get_tz(now):
     '''
     local_now = now
@@ -35,6 +41,8 @@ def get_tz(now):
     pass
 
 ELASTICSEARCH = None
+#=======
+#>>>>>>> 8f42c39 (proxy stats/x-forwarded-for)
 
 class MyServer(SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -52,6 +60,10 @@ class MyServer(SimpleHTTPRequestHandler):
         
         #test 
         #self.path = '/var/www/html/index.html'
+
+        #self.send_header("Location", self.path)
+        #self.end_headers()
+
         ip = self.client_address[0]
         port = self.client_address[1]
         time = datetime.datetime.now().isoformat()
@@ -100,7 +112,11 @@ class MyServer(SimpleHTTPRequestHandler):
             header[k] = headers[k]
         
         #parse headers for usability
-        parsed_header = parse_headers(headers)
+        parsed_header = parse_headers(headers, ip)
+        #switch proxy ip and original ip
+        if(parsed_header['proxy']):
+            parsed_header['proxy_ip'] = ip
+            ip = headers['X-Forwarded-For']
 
         sql_error_uname = check_sql(uname, uname, passwd)
         sql_error_passwd = check_sql(passwd, uname, passwd)
@@ -142,7 +158,6 @@ class MyServer(SimpleHTTPRequestHandler):
 
         inj_attempt = check_oscommand_injection(uname, passwd)
         #ip = "104.28.106.119"
-        timezone = get_tz(time)
         record = {
                 "@timestamp": time,
                 "action": "post",
@@ -156,7 +171,6 @@ class MyServer(SimpleHTTPRequestHandler):
                     "oscommand_injection": {"attempt": inj_attempt[0], "injection_string": inj_attempt[1]},
                     "headers": header,
                     "parsed_headers": parsed_header,
-                    "timezone": timezone,
                     }
                 }
         ELASTICSEARCH.index(index="web-test", document=record, pipeline="geoip")
@@ -197,7 +211,7 @@ class MyServer(SimpleHTTPRequestHandler):
         SimpleHTTPRequestHandler.do_GET(self)
         print(headers)
 
-def parse_headers(headers):
+def parse_headers(headers, ip):
     parsed = {}
     languages = []
     language = headers['Accept-Language'].split(';')
@@ -209,7 +223,11 @@ def parse_headers(headers):
     parsed['languages'] = languages
     user_agent = user_agent_parser.Parse(headers['User-Agent'])
     parsed['user_agent'] = user_agent
-
+    #check proxy
+    if('X-Forwarded-For' in headers and headers['X-Forwarded-For'] != ip):
+        parsed['proxy'] = True
+    else:
+        parsed['proxy'] = False
     return parsed
 
 def check_oscommand_injection(uname, passwd):
@@ -238,12 +256,10 @@ def parse_sql(command):
     for statement in permissions_statements:
         if(statement in command_list):
             return [False, statement]
-    #print("parse sql(",command,")")
     if (command.strip() == ';' or command.strip()==''):
         return [True, command]
     #check logic
     if('OR' in command_list):
-        #print(command_list)
         before = ''
         after = ''
         for i in range(len(command_list)):
@@ -298,7 +314,6 @@ def check_sql(string, uname, passwd):
             string_command = string_list[1][::-1]
         else:
             string_command = string_list[1]
-        #print(string_command)
         string_results = parse_sql(string_command)
 
         #check for permissions error
