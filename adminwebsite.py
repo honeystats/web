@@ -9,12 +9,7 @@ import datetime
 import shutil
 from ua_parser import user_agent_parser
 
-#<<<<<<< HEAD
 serverPort = int(os.environ.get('PORT') or 8080)
-#=======
-#hostName = "10.3.0.12"
-#serverPort = 8080
-#>>>>>>> 8f42c39 (proxy stats/x-forwarded-for)
 
 log = "./log.txt"
 
@@ -30,7 +25,6 @@ os_commands = {
             "hostnamectl" : "/hostname.html",
         }
 
-#<<<<<<< HEAD
 def get_tz(now):
     '''
     local_now = now
@@ -41,8 +35,6 @@ def get_tz(now):
     pass
 
 ELASTICSEARCH = None
-#=======
-#>>>>>>> 8f42c39 (proxy stats/x-forwarded-for)
 
 class MyServer(SimpleHTTPRequestHandler):
     def do_GET(self):
