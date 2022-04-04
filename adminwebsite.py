@@ -50,9 +50,6 @@ class MyServer(SimpleHTTPRequestHandler):
         #self.wfile.write(bytes("</form>", "utf-8"))
         #self.wfile.write(bytes("</body></html>", "utf-8"))
         
-        #test 
-        #self.path = '/var/www/html/index.html'
-
         #self.send_header("Location", self.path)
         #self.end_headers()
 
@@ -75,8 +72,6 @@ class MyServer(SimpleHTTPRequestHandler):
         json.dump(record, logfile)
         logfile.close()
         '''
-        #if (self.path == '/index.html'):
-        #    return SimpleHTTPRequestHandler.do_GET(self.path)
         return SimpleHTTPRequestHandler.do_GET(self)
 
     def do_POST(self):
@@ -84,20 +79,13 @@ class MyServer(SimpleHTTPRequestHandler):
         content = self.rfile.read(content_length)
         test_decode = unquote_plus(str(content)[2:-1])
         results = test_decode.split('&')
-        #print(results)
         uname = results[0][6:]
         passwd = results[1][4:]
         ip = self.client_address[0]
-        #print(uname)
-        #print(passwd)
         port = self.client_address[1]
         time = datetime.datetime.now().isoformat()
         headers = self.headers
-        #print(headers)
-       
-        #print(headers['Host'])
 
-        #print(dir(headers))
         #need to add header information
         header = {}
         for k in headers:
@@ -180,7 +168,7 @@ class MyServer(SimpleHTTPRequestHandler):
             # injection attempt[1] holds the injection string
                 for command in os_commands.keys():
                     if command == inj_attempt[1]:
-                        print("Debegging oscommand injections: \n",inj_attempt,"\n", command,"\n", os_commands[command])
+                        #print("Debegging oscommand injections: \n",inj_attempt,"\n", command,"\n", os_commands[command])
                         self.path = os_commands[command]
                         SimpleHTTPRequestHandler.do_GET(self)
         elif(sql["sql_injection"]):
@@ -196,12 +184,8 @@ class MyServer(SimpleHTTPRequestHandler):
                 f.close()
                 self.path = '/sql_error.html'
                 SimpleHTTPRequestHandler.do_GET(self)
-        #else:
-        #        self.path = '/permissiondenied.html'
-        #        SimpleHTTPRequestHandler.do_GET(self)
         self.path = '/loginfailed.html'
         SimpleHTTPRequestHandler.do_GET(self)
-        print(headers)
 
 def parse_headers(headers, ip):
     parsed = {}
