@@ -69,7 +69,7 @@ class MyServer(SimpleHTTPRequestHandler):
                     "url_path": self.path,
                     }
                 }
-        ELASTICSEARCH.index(index="web-test", document=record)
+        ELASTICSEARCH.index(index="honeystats_web_data", document=record)
         '''logfile = open(log, "a")
         logfile.write("\n")
         json.dump(record, logfile)
@@ -165,7 +165,7 @@ class MyServer(SimpleHTTPRequestHandler):
                     "parsed_headers": parsed_header,
                     }
                 }
-        ELASTICSEARCH.index(index="web-test", document=record, pipeline="geoip")
+        ELASTICSEARCH.index(index="honeystats_web_data", document=record, pipeline="geoip")
         '''
         logfile = open(log, "a")
         logfile.write("\n")
