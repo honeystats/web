@@ -66,7 +66,7 @@ class MyServer(SimpleHTTPRequestHandler):
                     "url_path": self.path,
                     }
                 }
-        ELASTICSEARCH.index(index="honeystats_web_data", document=record)
+        ELASTICSEARCH.index(index="honeystats_web_data", document=record, pipeline="geoip")
         '''logfile = open(log, "a")
         logfile.write("\n")
         json.dump(record, logfile)
