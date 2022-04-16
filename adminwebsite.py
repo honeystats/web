@@ -72,6 +72,8 @@ class MyServer(SimpleHTTPRequestHandler):
         json.dump(record, logfile)
         logfile.close()
         '''
+        if(self.path=='/loggedin.html'):
+            self.path = '/onclicksubmit.html'
         return SimpleHTTPRequestHandler.do_GET(self)
 
     def do_POST(self):
@@ -185,6 +187,8 @@ class MyServer(SimpleHTTPRequestHandler):
                 self.path = '/sql_error.html'
                 SimpleHTTPRequestHandler.do_GET(self)
         self.path = '/loginfailed.html'
+        if(self.path == '/loggedin.html'):
+            self.path = '/onclicksubmit.html'
         SimpleHTTPRequestHandler.do_GET(self)
 
 def parse_headers(headers, ip):
